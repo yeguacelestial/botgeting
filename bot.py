@@ -1,5 +1,4 @@
 import logging
-
 from settings import TOKEN
 
 from telegram.ext import (
