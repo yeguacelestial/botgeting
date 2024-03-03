@@ -1,5 +1,3 @@
-import gspread
-
 from telegram import Update
 
 from telegram.ext import ContextTypes
@@ -11,4 +9,11 @@ from restrictions import restricted
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=update.effective_chat.id, text="Bienvenido a Botgeting."
+    )
+
+
+@restricted
+async def actual(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id, text="Gastos hasta el momento."
     )
