@@ -27,3 +27,8 @@ def generate_pie_chart(keys: list, values: list, chart_title: str):
     plt.savefig(output_file)
 
     return output_file
+
+
+def generate_bar_chart():
+    # TODO: Generate bar chart with "restante" and "limite"
+    pass

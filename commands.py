@@ -19,7 +19,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @restricted
 async def actual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     summary_data, sheet_title = retrieve_summary_data(
-        worksheet_name="BUDGETING", sheet_index=-2
+        worksheet_name="BUDGETING", sheet_index=-1
     )
 
     summary_keys = list(summary_data.keys())[3:-1]

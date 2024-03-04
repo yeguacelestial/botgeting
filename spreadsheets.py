@@ -10,6 +10,10 @@ def retrieve_summary_data(worksheet_name: str, sheet_index: int):
     categorias = wks.col_values(6, value_render_option="UNFORMATTED_VALUE")
     gastado = wks.col_values(7, value_render_option="UNFORMATTED_VALUE")
 
+    # TODO: Return this data within summary data
+    restante = wks.col_values(8, value_render_option="UNFORMATTED_VALUE")
+    limite = wks.col_values(9, value_render_option="UNFORMATTED_VALUE")
+
     summary_data = dict(zip(categorias, gastado))
 
     # Remove all zeroes
