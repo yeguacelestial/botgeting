@@ -88,7 +88,10 @@ async def add_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
         await context.bot.send_message(
             chat_id=chat_id,
-            text="Por favor, proporciona el nombre de la categoría y el límite en pesos mexicanos.\n Ejemplo: /agregar_categoria DESPENSA 5000",
+            text="""
+            Por favor, proporciona el nombre de la categoría y el límite en pesos mexicanos.\n 
+            Ejemplo: /agregar_categoria DESPENSA 5000
+            """,
             parse_mode="Markdown"
         )
         return
@@ -152,4 +155,109 @@ async def add_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"Error al agregar la categoría: {e}"
+        )
+
+@restricted
+async def modify_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.message.chat_id)
+    print(f"Chat ID: {chat_id}")
+    print(f"Template status: {template_status}")
+    print(f"Template status for chat_id {chat_id}: {template_status.get(chat_id)}")
+    if chat_id not in template_status:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Primero debes crear la hoja de cálculo usando el comando /start."
+        )
+        return
+
+    if len(context.args) < 2:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Por favor, proporciona el nombre de la categoria actual y al menos uno de los siguientes: el nuevo nombre o el nuevo límite en pesos mexicanos."
+        )
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="""
+            Ejemplos: 
+            /modificar_categoria <nombre> <nuevo-nombre> <nuevo-limite>
+            /modificar_categoria SALIDAS DESPENSA 6000
+            /modificar_categoria SALIDAS 6000
+            /modificar_categoria SALIDAS ALIMENTOS
+            """
+        )
+        return
+
+    old_category_name = context.args[0].upper()
+    new_category_name = None
+    new_limit = None
+
+    if len(context.args) == 2:
+        try:
+            new_limit = float(context.args[1])
+        except ValueError:
+            new_category_name = context.args[1].upper()
+    elif len(context.args) == 3:
+        new_category_name = context.args[1].upper()
+        try:
+            new_limit = float(context.args[2])
+        except ValueError:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="El límite debe ser un número válido. Ejemplo: /modificar_categoria DESPENSA ALIMENTOS 6000.50",
+                parse_mode="Markdown"
+            )
+            return
+
+    creds = load_user_credentials(chat_id)
+    if not creds:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="No se encontraron credenciales. Por favor, autoriza el acceso a tu cuenta de Google usando el comando /start."
+        )
+        return
+
+    try:
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_url(template_status[chat_id]['link'])
+        worksheet = spreadsheet.sheet1
+
+        existing_categories = [category for category in worksheet.col_values(6)[3:15] if category]  # F4 to F15
+        if old_category_name not in existing_categories:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"La categoría '{old_category_name}' no existe."
+            )
+            return
+
+        row_index = existing_categories.index(old_category_name) + 4  # Adjust for 0-based index and header rows
+
+        if new_category_name:
+            worksheet.update_cell(row_index, 6, new_category_name)  # Column F
+        if new_limit is not None:
+            worksheet.update_cell(row_index, 9, new_limit)  # Column I
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"Categoría '{old_category_name}' ha sido modificada."
+        )
+        
+        if new_category_name:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"Categoría '{old_category_name}' ha sido modificada a '{new_category_name}'."
+            )
+        if new_limit and new_category_name:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"Límite de la categoría '{old_category_name}' ha sido modificado a {new_limit}."
+            )
+        elif new_limit:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"Límite de la categoría '{old_category_name}' ha sido modificado a {new_limit}."
+            )
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"Error al modificar la categoría: {e}"
         )

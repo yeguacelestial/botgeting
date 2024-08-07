@@ -6,7 +6,7 @@ The bot is expected to:
 - Create:
   - [x] A new spreadsheet associated to the Google account of the user
   - [x] A new sheet with the current month and year
-  - [ ] New CATEGORIA specified by the user (max: 12)
+  - [x] New CATEGORIA specified by the user (max: 12)
   - [ ] TRANSACCIONES captured by the user
   - [ ] AHORROS specified by the user (max: 3)
 
