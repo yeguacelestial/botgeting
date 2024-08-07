@@ -88,12 +88,22 @@ async def add_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
         await context.bot.send_message(
             chat_id=chat_id,
-            text="Por favor, proporciona el nombre de la categoría y el límite. Ejemplo: /add_category ALIMENTOS 5000"
+            text="Por favor, proporciona el nombre de la categoría y el límite en pesos mexicanos.\n Ejemplo: /agregar_categoria DESPENSA 5000",
+            parse_mode="Markdown"
         )
         return
 
     category_name = context.args[0].upper()
     limit = context.args[1]
+    try:
+        limit = float(limit)
+    except ValueError:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="El límite debe ser un número válido. Ejemplo: /agregar_categoria DESPENSA 5000.50",
+            parse_mode="Markdown"
+        )
+        return
 
     # Authenticate and open the spreadsheet
     creds = load_user_credentials(chat_id)
