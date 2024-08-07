@@ -18,6 +18,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @restricted
 async def actual(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Sections: 
+        - RESUMEN (CATEGORIA, GASTADO, RESTANTE, LIMITE)
+        - TIPO DE PAGO (CATEGORIA, GASTADO)
+        - AHORROS (PORTAFOLIO, INVERTIDO, RENDIMIENTO, TOTAL, FECHA DE CAPTURA)
+        - ¿CUANTO GASTE ENTRE fecha1 Y fecha2?
+    """
+
     summary_data, sheet_title = retrieve_summary_data(
         worksheet_name="BUDGETING", sheet_index=-1
     )

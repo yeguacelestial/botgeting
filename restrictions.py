@@ -5,6 +5,7 @@ from os import getenv
 load_dotenv()
 ADMIN_USER_ID = getenv("ADMIN_USER_ID", "")
 
+# TODO: Read from google sheet usernames
 LIST_OF_ADMINS = [
     ADMIN_USER_ID,
 ]
