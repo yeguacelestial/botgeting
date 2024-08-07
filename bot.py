@@ -19,7 +19,7 @@ application = ApplicationBuilder().token(TOKEN).build()
 # Handlers
 start_handler = CommandHandler("start", start)
 auth_code_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, handle_auth_code)
-add_category_handler = CommandHandler("add_category", add_category)
+add_category_handler = CommandHandler("agregar_categoria", add_category)
 
 application.add_handler(start_handler)
 application.add_handler(auth_code_handler)
