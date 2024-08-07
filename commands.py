@@ -1,5 +1,7 @@
 from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+
 from google_auth_oauthlib.flow import InstalledAppFlow
 from urllib.parse import urlparse, parse_qs
 import gspread
@@ -8,6 +10,8 @@ from restrictions import restricted
 from settings import CREDENTIALS_FILE, SCOPES
 from spreadsheets import create_spreadsheet
 from storage import load_template_status, save_template_status, load_user_credentials, save_user_credentials
+
+from telegram.ext import CallbackContext
 
 template_status = load_template_status()  # Load template status from file
 user_credentials = {}
@@ -158,55 +162,108 @@ async def add_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 @restricted
-async def modify_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def select_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = str(update.message.chat_id)
-    print(f"Chat ID: {chat_id}")
-    print(f"Template status: {template_status}")
-    print(f"Template status for chat_id {chat_id}: {template_status.get(chat_id)}")
-    if chat_id not in template_status:
+    if chat_id not in template_status or not template_status[chat_id].get('created'):
         await context.bot.send_message(
             chat_id=chat_id,
             text="Primero debes crear la hoja de cálculo usando el comando /start."
         )
         return
 
-    if len(context.args) < 2:
+    creds = load_user_credentials(chat_id)
+    if not creds:
         await context.bot.send_message(
             chat_id=chat_id,
-            text="Por favor, proporciona el nombre de la categoria actual y al menos uno de los siguientes: el nuevo nombre o el nuevo límite en pesos mexicanos."
-        )
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="""
-            Ejemplos: 
-            /modificar_categoria <nombre> <nuevo-nombre> <nuevo-limite>
-            /modificar_categoria SALIDAS DESPENSA 6000
-            /modificar_categoria SALIDAS 6000
-            /modificar_categoria SALIDAS ALIMENTOS
-            """
+            text="No se encontraron credenciales. Por favor, autoriza el acceso a tu cuenta de Google usando el comando /start."
         )
         return
 
-    old_category_name = context.args[0].upper()
-    new_category_name = None
-    new_limit = None
+    try:
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_url(template_status[chat_id]['link'])
+        worksheet = spreadsheet.sheet1
 
-    if len(context.args) == 2:
-        try:
-            new_limit = float(context.args[1])
-        except ValueError:
-            new_category_name = context.args[1].upper()
-    elif len(context.args) == 3:
-        new_category_name = context.args[1].upper()
-        try:
-            new_limit = float(context.args[2])
-        except ValueError:
+        existing_categories = [category for category in worksheet.col_values(6)[3:15] if category]  # F4 to F15
+        if not existing_categories:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text="El límite debe ser un número válido. Ejemplo: /modificar_categoria DESPENSA ALIMENTOS 6000.50",
-                parse_mode="Markdown"
+                text="No hay categorías disponibles para modificar."
             )
             return
+
+        keyboard = [[InlineKeyboardButton(category, callback_data=f"select_{category}")] for category in existing_categories]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Selecciona la categoría que deseas modificar:",
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"Error al obtener las categorías: {e}"
+        )
+
+async def category_selected(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+    selected_category = query.data.split('_', 1)[1]
+
+    context.user_data['selected_category'] = selected_category
+
+    keyboard = [
+        [InlineKeyboardButton("Editar Nombre", callback_data="edit_name")],
+        [InlineKeyboardButton("Editar Límite", callback_data="edit_limit")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        text=f"Has seleccionado la categoría: {selected_category}\n¿Qué te gustaría editar?",
+        reply_markup=reply_markup
+    )
+
+async def edit_choice(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+    choice = query.data
+
+    if choice == "edit_name":
+        context.user_data['edit_choice'] = "name"
+        await query.edit_message_text(
+            text=f"Has seleccionado editar el nombre de la categoría: {context.user_data['selected_category']}\n"
+                 f"Por favor, proporciona el nuevo nombre.\n"
+                 f"Ejemplo: /modificar_categoria NUEVO_NOMBRE"
+        )
+    elif choice == "edit_limit":
+        context.user_data['edit_choice'] = "limit"
+        await query.edit_message_text(
+            text=f"Has seleccionado editar el límite de la categoría: {context.user_data['selected_category']}\n"
+                 f"Por favor, proporciona el nuevo límite en pesos mexicanos.\n"
+                 f"Ejemplo: /modificar_categoria 6000"
+        )
+
+@restricted
+async def modify_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.message.chat_id)
+    if chat_id not in template_status or not template_status[chat_id].get('created'):
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Primero debes crear la hoja de cálculo usando el comando /start."
+        )
+        return
+
+    if 'selected_category' not in context.user_data or 'edit_choice' not in context.user_data:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Por favor, selecciona una categoría y una opción de edición usando el comando /select_category."
+        )
+        return
+
+    old_category_name = context.user_data['selected_category']
+    edit_choice = context.user_data['edit_choice']
+    new_value = context.args[0]
 
     creds = load_user_credentials(chat_id)
     if not creds:
@@ -231,33 +288,105 @@ async def modify_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         row_index = existing_categories.index(old_category_name) + 4  # Adjust for 0-based index and header rows
 
-        if new_category_name:
-            worksheet.update_cell(row_index, 6, new_category_name)  # Column F
-        if new_limit is not None:
-            worksheet.update_cell(row_index, 9, new_limit)  # Column I
+        if edit_choice == "name":
+            worksheet.update_cell(row_index, 6, new_value.upper())  # Column F
+        elif edit_choice == "limit":
+            try:
+                new_limit = float(new_value)
+                worksheet.update_cell(row_index, 9, new_limit)  # Column I
+            except ValueError:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="El límite debe ser un número válido. Ejemplo: /modificar_categoria 6000.50",
+                    parse_mode="Markdown"
+                )
+                return
 
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"Categoría '{old_category_name}' ha sido modificada."
         )
-        
-        if new_category_name:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"Categoría '{old_category_name}' ha sido modificada a '{new_category_name}'."
-            )
-        if new_limit and new_category_name:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"Límite de la categoría '{old_category_name}' ha sido modificado a {new_limit}."
-            )
-        elif new_limit:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"Límite de la categoría '{old_category_name}' ha sido modificado a {new_limit}."
-            )
     except Exception as e:
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"Error al modificar la categoría: {e}"
         )
+
+@restricted
+async def select_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.message.chat_id)
+    if chat_id not in template_status or not template_status[chat_id].get('created'):
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Primero debes crear la hoja de cálculo usando el comando /start."
+        )
+        return
+
+    creds = load_user_credentials(chat_id)
+    if not creds:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="No se encontraron credenciales. Por favor, autoriza el acceso a tu cuenta de Google usando el comando /start."
+        )
+        return
+
+    try:
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_url(template_status[chat_id]['link'])
+        worksheet = spreadsheet.sheet1
+
+        existing_categories = [category for category in worksheet.col_values(6)[3:15] if category]  # F4 to F15
+        if not existing_categories:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="No hay categorías disponibles para modificar."
+            )
+            return
+
+        keyboard = [[InlineKeyboardButton(category, callback_data=f"select_{category}")] for category in existing_categories]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Selecciona la categoría que deseas modificar:",
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"Error al obtener las categorías: {e}"
+        )
+
+async def category_selected(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+    selected_category = query.data.split('_', 1)[1]
+
+    context.user_data['selected_category'] = selected_category
+
+    keyboard = [
+        [InlineKeyboardButton("Editar Nombre", callback_data="edit_name")],
+        [InlineKeyboardButton("Editar Límite", callback_data="edit_limit")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        text=f"Has seleccionado la categoría: {selected_category}\n¿Qué te gustaría editar?",
+        reply_markup=reply_markup
+    )
+
+async def edit_selected(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+    action = query.data
+
+    if action == "edit_name":
+        await query.edit_message_text(
+            text=f"Por favor, proporciona el nuevo nombre para la categoría '{context.user_data['selected_category']}'."
+        )
+    elif action == "edit_limit":
+        await query.edit_message_text(
+            text=f"Por favor, proporciona el nuevo límite para la categoría '{context.user_data['selected_category']}'."
+        )
+
+    context.user_data['action'] = action
