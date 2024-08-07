@@ -7,10 +7,10 @@ The bot is expected to:
   - [x] A new spreadsheet associated to the Google account of the user
   - [x] A new sheet with the current month and year
   - [ ] New CATEGORIA specified by the user (max: 12)
-  - [ ] AHORROS specified by the user (max: 3)
   - [ ] TRANSACCIONES captured by the user
+  - [ ] AHORROS specified by the user (max: 3)
 
-- Read:
+- Read on charts and tables:
   - [ ] How much the user has spent per CATEGORIA
   - [ ] How much the user has spent per TIPO DE PAGO
   - [ ] How much the user has saved per PORTAFOLIO and how much RENDIMIENTO has been earned from it
